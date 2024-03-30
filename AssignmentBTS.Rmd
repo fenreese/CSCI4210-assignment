@@ -1,0 +1,139 @@
+---
+title: "A history of my listening habits: behind the scenes"
+author: "Reese Dominguez"
+date: "2024-03-27"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, libraries}
+library(tidyverse)
+library(ggplot2)
+library(ggthemes)
+```
+
+```{r, libraries}
+library(vembedr) # Embedding songs, please listen to them
+```
+
+# Introduction
+
+Music has been a big part of my life. My mother told me that she would play music for me before I was even born, and every day ever since has not been without at least one song playing\*. I thought I would want to keep track of how my taste and habits change over time, as I get into new rhythm games and learn about new artists from my friends. I would also like to see how much my life has changed just entirely based on the music I listened to at certain times.
+
+last.fm is a platform that creates a profile of your music taste over time, based on records of all the songs you listen to (as long as you've linked your music player of choice to it). I have decided to take all of my data from my [last.fm profile](https://www.last.fm/user/emperte) via an external site that converts my listening history to a .csv file (<https://lastfm.ghan.nl/export/>). ~~I have learned from friends that manually taking things from the last.fm API is hell on earth...~~
+
+This data may not be the most accurate, as it only has records of listening habits from 2017-01-02 13:17:31 GMT-5 to 2024-03-27 12:55:50 GMT-4. (As I type this, I am listening to music...)
+
+# Questions To Explore
+
+-   Which country's artists do I listen to the most? (Why?)
+
+-   Of my top 10 artists listened to (per year/in general), when did I listen to this artist the most? (What happened during that time period?)
+
+-   What time of day/day of the week do I tend to listen to the most songs?
+
+# The Data Itself
+
+```{r}
+lfm_data <- read.csv("lfm-1711558550.csv")
+```
+
+```{r}
+lfm_data
+```
+
+| Name          | Description                                                                                               |
+|--------------------------|----------------------------------------------|
+| `uts`         | The Unix epoch timestamp (how many seconds since 1970-01-01 00:00:00 UTC) of when the song was scrobbled. |
+| `utc_time`    | The human-readable time of when the song was scrobbled.                                                   |
+| `artist`      | The artist of the song.                                                                                   |
+| `artist_mbid` | The MusicBrainz ID of the artist.                                                                         |
+| `album`       | The album the song belongs in.                                                                            |
+| `album_mbid`  | The MusicBrainz ID of the album (referred to in MB as "release")                                          |
+| `track`       | The name of the song.                                                                                     |
+| `track_mbid`  | The MusicBrainz ID of the song (referred to in MB as "track")                                             |
+
+: An explanation of the columns of the dataframe.
+
+There isn't enough origin country or genre information from this dataset alone, but there are fields that could get us that info, specifically, the MusicBrainz IDs. I could look up an album or artist on MusicBrainz by their ID and get what I'm missing.
+
+Side note: while reading this and the next few sections, I highly suggest listening to the songs I link. Here's the song I'll be using as an example of MusicBrainz IDs:
+
+```{r}
+embed_youtube("TlhIk7iPU9o")
+```
+
+Here's the example:
+
+```{r}
+head(filter(
+            lfm_data, 
+              artist == "Magdalena Bay" &
+              album == "Mercurial World" &
+              track == "Secrets (Your Fire)"), 1)
+```
+
+For the track **Secrets (Your Fire)** by the artist **Magdalena Bay**, the MusicBrainz IDs are as follows:
+
+-   **Artist (Magdalena Bay)**: `68c261d5-48c8-4ea9-9466-9fc908dc79bb` ([link](https://musicbrainz.org/artist/68c261d5-48c8-4ea9-9466-9fc908dc79bb))
+-   **Album (Mercurial World)**: `0850f24e-32a1-4280-a78c-f427a62a24f1` ([link](https://musicbrainz.org/release/0850f24e-32a1-4280-a78c-f427a62a24f1))
+    -   Note: this is the MBID for the *physical CD version*.
+-   **Song (Secrets (Your Fire))**: `37090ca5-a224-4cda-a975-e2a3487cf1cb` ([link](https://musicbrainz.org/track/37090ca5-a224-4cda-a975-e2a3487cf1cb))
+    -   Note: this is the MBID for Disc 1, Track 4 of the physical CD version.
+
+Looking at the pages for the artist and the song, it shows that Magdalena Bay are based in the United States, and *Secrets (Your Fire)* is under the genre "synth-pop".
+
+I'll have to do this programmatically for almost 94k songs, do I...
+
+# Taking Data From MusicBrainz
+
+Surely there is an XML parser
+
+```{r}
+n_distinct(lfm_data$artist_mbid)
+```
+
+```{r}
+n_distinct(lfm_data$track_mbid)
+```
+
+```{r}
+
+```
+
+# Messing around with MusicBrainz API
+
+```{r}
+library(musicbrainz)
+```
+
+```{r}
+magbay <- lookup_artist_by_id("68c261d5-48c8-4ea9-9466-9fc908dc79bb")
+```
+
+```{r}
+magbay$area_iso
+```
+
+If not for API limits, I would be applying the "lookup artist by ID" function and then getting just the area's ISO code.
+
+```{r}
+mercurial <- lookup_release_by_id("0850f24e-32a1-4280-a78c-f427a62a24f1")
+```
+
+```{r}
+mercurial
+```
+
+```{r}
+secrets <- lookup_recording_by_id("e8aeffe6-6f20-455c-961e-f4139e4cede9")
+```
+
+```{r}
+secrets
+```
+
+WHERE ARE THE TAGS WAIT NO WHAT

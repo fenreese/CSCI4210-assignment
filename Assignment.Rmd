@@ -1,0 +1,234 @@
+---
+title: "A history of my listening habits"
+author: "Reese Dominguez"
+date: "2024-03-27"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, libraries}
+library(tidyverse)
+library(ggplot2)
+library(ggthemes)
+library(lubridate)
+library(maps)
+```
+
+# Introduction
+
+Music has been a big part of my life. My mother told me that she would play music for me before I was even born, and every day ever since has not been without at least one song playing\*. I thought I would want to keep track of how my taste and habits change over time, as I get into new rhythm games and learn about new artists from my friends. I would also like to see how much my life has changed just entirely based on the music I listened to at certain times.
+
+last.fm is a platform that creates a profile of your music taste over time, based on records of all the songs you listen to (as long as you've linked your music player of choice to it). I have decided to take all of my data from my [last.fm profile](https://www.last.fm/user/emperte) via an external site that converts my listening history to a .csv file (<https://lastfm.ghan.nl/export/>). ~~I have learned from friends that manually taking things from the last.fm API is hell on earth...~~
+
+This data may not be the most accurate, as it only has records of listening habits from 2017-01-02 13:17:31 GMT-5 to 2024-03-27 12:55:50 GMT-4. (As I type this, I am listening to music...)
+
+# Questions To Explore
+
+-   Which country's artists do I listen to the most? (Why?)
+
+-   Of my top 10 artists listened to (per year/in general), when did I listen to this artist the most? (What happened during that time period?)
+
+-   What time of day/day of the week do I tend to listen to the most songs?
+
+Some websites to check for inspiration:
+
+-   <https://hotonehundo.wordpress.com/2018/01/11/last-fm-visualization-tools/>
+
+-   <https://hotonehundo.wordpress.com/2018/02/10/last-fm-advanced-scrobbling-statistics/>
+
+# The Data Itself
+
+```{r}
+lfm_data <- read.csv("datasets/lfm-1711558550.csv")
+```
+
+```{r}
+lfm_data
+```
+
+| Name          | Description                                                                                               |
+|--------------------------|----------------------------------------------|
+| `uts`         | The Unix epoch timestamp (how many seconds since 1970-01-01 00:00:00 UTC) of when the song was scrobbled. |
+| `utc_time`    | The human-readable time of when the song was scrobbled.                                                   |
+| `artist`      | The artist of the song.                                                                                   |
+| `artist_mbid` | The MusicBrainz ID of the artist.                                                                         |
+| `album`       | The album the song belongs in.                                                                            |
+| `album_mbid`  | The MusicBrainz ID of the album (referred to in MB as "release")                                          |
+| `track`       | The name of the song.                                                                                     |
+| `track_mbid`  | The MusicBrainz ID of the song (referred to in MB as "track")                                             |
+
+```{r}
+lfm_data$est_time <- 
+  lfm_data$uts |>
+    as_datetime()
+```
+
+```{r}
+lfm_data <- lfm_data |>
+  select(-one_of("uts", "utc_time"))
+```
+
+```{r}
+lfm_data
+```
+
+## Top 10 Artists
+
+```{r}
+top_artists <- 
+  lfm_data |>
+    count(artist, sort=TRUE) |>
+    head(n=10) |>
+    arrange(desc(n))
+```
+
+```{r}
+top_artists
+```
+
+```{r}
+artists_plot <- 
+  ggplot(data=top_artists, aes(x=reorder(artist, n), y=n, fill=reorder(artist, n))) +
+  geom_bar(stat = "identity", show.legend = FALSE)
+
+artists_plot <-
+  artists_plot +
+  labs(
+    x = "Artist",
+    y = "Total number of listens"
+  ) +
+  theme(
+    legend.position = "none"
+  ) +
+  coord_flip()
+  
+```
+
+```{r}
+artists_plot
+```
+
+```{r}
+top10_timestamps <- 
+  lfm_data |>
+    filter(artist %in% top_artists$artist) |>
+    group_by(artist, month = floor_date(est_time, "month")) |>
+    summarise(num_scrobbles = n())
+```
+
+```{r}
+top10_timestamps_graph <- 
+  ggplot(top10_timestamps, aes(x=month, y=num_scrobbles, colour=artist)) +
+    geom_line()
+
+top10_timestamps_graph <-
+  top10_timestamps_graph +
+  labs(
+    colour = "Artist",
+    x = "Month",
+    y = "Number of listens"
+  )
+
+top10_timestamps_graph
+```
+
+Honestly, I don't even know how I listened to that much Doja Cat during June 2022 either.
+
+## Top 10 Albums
+
+```{r}
+top_albums <- 
+  lfm_data |>
+    group_by(artist, album) |>
+    summarise(num_listens = n()) |>
+    arrange(desc(num_listens))
+```
+
+```{r}
+# Planet Her (Deluxe) and Planet Her are basically the same album
+# I chose to just combine them both
+top_albums$num_listens[3] <- top_albums$num_listens[2] + top_albums$num_listens[3]
+top_albums <- top_albums[-2,]
+```
+
+```{r}
+top_albums$full_album <- paste(top_albums$artist, top_albums$album, sep = " - ")
+```
+
+```{r}
+top_albums <-
+  top_albums |>
+  head(n=10)
+```
+
+```{r}
+albums_plot <- 
+  ggplot(data=top_albums, aes(x=reorder(full_album, num_listens), y=num_listens, fill=reorder(full_album, num_listens))) +
+  geom_bar(stat = "identity", show.legend = FALSE)
+
+albums_plot <-
+  albums_plot +
+  labs(
+    x = "Album",
+    y = "Total number of listens"
+  ) +
+  theme(
+    legend.position = "none"
+  ) +
+  coord_flip()
+```
+
+```{r}
+albums_plot
+```
+## Countries and Genres
+
+```{r}
+artist_genre <- read.csv("datasets/artist_genre.csv")
+```
+
+```{r}
+artist_genre
+```
+
+
+```{r}
+artist_country <- read.csv("datasets/country_codes.csv")
+```
+```{r}
+artist_country
+```
+
+
+```{r}
+lfm_country <- 
+  lfm_data |>
+  left_join(artist_country, by = join_by(artist_mbid == artist_mbid))
+```
+
+```{r}
+lfm_country
+```
+
+```{r}
+lfm_country_genre <-
+  lfm_country |>
+  left_join(artist_genre, by = join_by(artist == artist))
+```
+
+```{r}
+lfm_country_genre <- lfm_country_genre |> select(-c(X, count))
+```
+
+```{r}
+lfm_country_genre
+```
+
+```{r}
+lfm_country_genre |>
+  write.csv("datasets/lfm-complete.csv")
+```
+
