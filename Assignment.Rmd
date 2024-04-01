@@ -1,56 +1,67 @@
 ---
-title: "A history of my listening habits"
+title: "A Tour of My Listening History"
+subtitle: "or: The Process of a Little Transformation and a Wicked Rate Limit"
 author: "Reese Dominguez"
-date: "2024-03-27"
-output: html_document
+date: "2024-04-01"
+output: 
+  html_document:
+    code_folding: hide
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(echo = TRUE, fig.width=12, fig.height=8)
 ```
 
-```{r, libraries}
+```{r, libraries, echo=F, message=F}
 library(tidyverse)
 library(ggplot2)
 library(ggthemes)
 library(lubridate)
-library(maps)
+library(countrycode)
+library(RColorBrewer)
+library(see)
 ```
 
-# Introduction
+# Terminology
+- **last.fm**: A music tracker site that creates a profile of your music taste over a period of time, keeping records of all the songs you listen to (as long as you link your music player of choice to it). [Wikipedia article](https://en.wikipedia.org/wiki/Last.fm)
+- **MusicBrainz**: An online, open source database of music. Keeps track of artists, their songs, and relationships between them (yet this isn't entirely up to date). Also has information such as the artist's country and every physical/digital release they have. [Wikipedia article](https://en.wikipedia.org/wiki/MusicBrainz)
+- **Scrobble**: A record of a listen of a song. Includes all the song's metadata, as well as the time the song was listened.
 
+# Introduction
 Music has been a big part of my life. My mother told me that she would play music for me before I was even born, and every day ever since has not been without at least one song playing\*. I thought I would want to keep track of how my taste and habits change over time, as I get into new rhythm games and learn about new artists from my friends. I would also like to see how much my life has changed just entirely based on the music I listened to at certain times.
 
-last.fm is a platform that creates a profile of your music taste over time, based on records of all the songs you listen to (as long as you've linked your music player of choice to it). I have decided to take all of my data from my [last.fm profile](https://www.last.fm/user/emperte) via an external site that converts my listening history to a .csv file (<https://lastfm.ghan.nl/export/>). ~~I have learned from friends that manually taking things from the last.fm API is hell on earth...~~
+To do this, I have decided to take all of my data from my [last.fm profile](https://www.last.fm/user/emperte) via an external site that converts my listening history to a .csv file (<https://lastfm.ghan.nl/export/>). For any auxiliary information (such as artist country), I took from [MusicBrainz's database](https://musicbrainz.org/) and made more API requests to Last.fm for artist tags. I stitched the auxiliary information together on Python, the process of which can be seen in the `python_data_wrangling` folder of this repo (**TODO:** make repo).
 
 This data may not be the most accurate, as it only has records of listening habits from 2017-01-02 13:17:31 GMT-5 to 2024-03-27 12:55:50 GMT-4. (As I type this, I am listening to music...)
 
 # Questions To Explore
+1. What genres, or in Last.fm's case, "tags" do I listen to the most?
+	- When have I listened to each genre/tag the most throughout my listening history?
+2. When do I tend to listen to music the most?
+3. Which country's music have I listened to the most?
+4. What are my top 10 artists and albums?
+	- Is there a reason why these artists/albums are in my top 10?
 
--   Which country's artists do I listen to the most? (Why?)
+These questions will be explored in reverse order. I would like to thank and give credits to these websites for inspiration on these graphs:
 
--   Of my top 10 artists listened to (per year/in general), when did I listen to this artist the most? (What happened during that time period?)
-
--   What time of day/day of the week do I tend to listen to the most songs?
-
-Some websites to check for inspiration:
-
--   <https://hotonehundo.wordpress.com/2018/01/11/last-fm-visualization-tools/>
-
--   <https://hotonehundo.wordpress.com/2018/02/10/last-fm-advanced-scrobbling-statistics/>
+- Hot One Hundo's blog posts on last.fm visualization ([here](https://hotonehundo.wordpress.com/2018/01/11/last-fm-visualization-tools/) and [here](https://hotonehundo.wordpress.com/2018/02/10/last-fm-advanced-scrobbling-statistics/))
+- [Scatter.FM](https://scatterfm.markhansen.co.nz/graph.html#/user/emperte)
+- [Explr.fm](https://mold.github.io/explr/?username=emperte)
 
 # The Data Itself
+Here's a little sample of the data I'm working with.
 
-```{r}
+```{r, echo=F}
 lfm_data <- read.csv("datasets/lfm-1711558550.csv")
 ```
 
-```{r}
-lfm_data
+```{r, class.source = 'fold-show', echo = T}
+lfm_data |>
+  head(10)
 ```
 
 | Name          | Description                                                                                               |
-|--------------------------|----------------------------------------------|
+|---------------------|---------------------------------------------------|
 | `uts`         | The Unix epoch timestamp (how many seconds since 1970-01-01 00:00:00 UTC) of when the song was scrobbled. |
 | `utc_time`    | The human-readable time of when the song was scrobbled.                                                   |
 | `artist`      | The artist of the song.                                                                                   |
@@ -60,24 +71,26 @@ lfm_data
 | `track`       | The name of the song.                                                                                     |
 | `track_mbid`  | The MusicBrainz ID of the song (referred to in MB as "track")                                             |
 
-```{r}
+```{r, echo=F}
 lfm_data$est_time <- 
   lfm_data$uts |>
-    as_datetime()
+    as_datetime(tz = "America/Toronto")
 ```
 
-```{r}
+```{r, echo=F}
 lfm_data <- lfm_data |>
-  select(-one_of("uts", "utc_time"))
+  select(-one_of("utc_time"))
 ```
 
-```{r}
-lfm_data
+```{r, echo = F, results = 'hide'}
+lfm_data |>
+  head(25)
 ```
 
-## Top 10 Artists
+# Top Artists
+I feel like I'll be surprised by this data, as I feel like I've changed a lot over the years.
 
-```{r}
+```{r, echo=F}
 top_artists <- 
   lfm_data |>
     count(artist, sort=TRUE) |>
@@ -85,61 +98,117 @@ top_artists <-
     arrange(desc(n))
 ```
 
-```{r}
+```{r, echo = F, results = 'hide'}
 top_artists
 ```
 
-```{r}
+```{r, echo=F}
 artists_plot <- 
   ggplot(data=top_artists, aes(x=reorder(artist, n), y=n, fill=reorder(artist, n))) +
-  geom_bar(stat = "identity", show.legend = FALSE)
+  geom_bar(stat = "identity", show.legend = FALSE) +
+  scale_fill_manual(values = tableau_color_pal("Tableau 10")(10)) +
+  scale_y_continuous(
+      limits = c(0, max(top_artists$n) + 500),
+      breaks = seq(0, max(top_artists$n) + 500, 1000),
+      minor_breaks = seq(0, max(top_artists$n) + 500, 500),
+      expand = c(0,0)
+    )
+```
 
+```{r, echo=F}
 artists_plot <-
   artists_plot +
   labs(
     x = "Artist",
-    y = "Total number of listens"
+    y = "Total number of listens",
+    title = "Top 10 Listened To Artists (2017-2024)"
   ) +
+  theme_minimal() +
   theme(
-    legend.position = "none"
+    plot.title = element_text(hjust=0.5, size = rel(1.75), face = "bold"),
+    legend.position = "none",
+    axis.line.y = element_blank(),
+    axis.line.x = element_blank(),
+    panel.grid.minor.y = element_blank(),
+    panel.grid.major.y = element_blank()
   ) +
   coord_flip()
-  
 ```
 
-```{r}
+```{r, echo=F}
 artists_plot
 ```
+Seeing all of these artists has helped me realize that I tend to go through phases where I listen to a lot of one artist, get burnt out of listening to them, and then never listen to them again. (I believe out of these 10, the only artists I still regularly listen to are aespa, (G)I-DLE, PSYQUI, and tricot.) To see if this is true, I'll plot a line graph of listens of my Top 10 artists per month.
 
-```{r}
+```{r, echo=F, message=F, warning=F}
 top10_timestamps <- 
   lfm_data |>
     filter(artist %in% top_artists$artist) |>
     group_by(artist, month = floor_date(est_time, "month")) |>
-    summarise(num_scrobbles = n())
+    summarise(num_scrobbles = n()) |>
+    left_join(top_artists, by = join_by(artist == artist))
 ```
 
-```{r}
-top10_timestamps_graph <- 
-  ggplot(top10_timestamps, aes(x=month, y=num_scrobbles, colour=artist)) +
-    geom_line()
+```{r, echo = F, results = 'hide'}
+top10_timestamps |>
+  head(25)
+```
 
+```{r, echo=F}
+top10_timestamps_graph <- 
+  ggplot(top10_timestamps, aes(x=month, y=num_scrobbles, colour=reorder(artist, n))) +
+    geom_line(linewidth=1.5) +
+    scale_colour_manual(values = tableau_color_pal("Tableau 10")(10)) +
+    scale_x_datetime(
+      limits = as.POSIXct(c("2017-01-02","2024-03-27")),
+      date_breaks = "1 year",
+      date_minor_breaks = "1 month",
+      labels = scales::date_format(format = "%Y"),
+      expand = c(0,0)
+    ) +
+    scale_y_continuous(
+      limits = c(0, 1300),
+      breaks = seq(0, 1300, 100),
+      minor_breaks = seq(0, 1300, 50),
+      expand = c(0,0)
+    )
+```
+
+```{r, echo=F}
 top10_timestamps_graph <-
   top10_timestamps_graph +
   labs(
     colour = "Artist",
-    x = "Month",
-    y = "Number of listens"
+    x = "Year",
+    y = "Number of listens",
+    title = "Frequency of top 10 artists") + 
+  theme_modern() +
+  theme (
+    plot.title = element_text(hjust=0.5, size = rel(1.75), face = "bold"),
+    legend.position = "top",
+  ) + 
+  guides (
+    colour = guide_legend(override.aes = list(size = 2), nrow=1)
   )
 
-top10_timestamps_graph
 ```
 
-Honestly, I don't even know how I listened to that much Doja Cat during June 2022 either.
+```{r, echo=F, message=F, warning=F}
+top10_timestamps_graph
+```
+As I thought, there are spikes in my listening activity, backing up my hypothesis. I can list some important spikes:
 
-## Top 10 Albums
+- Tyler, the Creator: early 2018 (figuring myself out, listened to nothing but [Flower Boy](https://en.wikipedia.org/wiki/Flower_Boy). I'm nonbinary by the way.)
+- Mac Miller: late 2018 (he died September 7, 2018; rest in peace) and early 2020 (release of [Circles](https://en.wikipedia.org/wiki/Circles_(Mac_Miller_album)))
+- Vulfpeck: late 2019 (got together with my ex, who got me into the band)
+- Thundercat: early 2020 (release of [It Is What It Is](https://en.wikipedia.org/wiki/It_Is_What_It_Is_(Thundercat_album)))
+- aespa: late 2021 - early 2022 (broke up with my ex, release of the [Savage mini-album](https://en.wikipedia.org/wiki/Savage_(EP)))
+- Doja Cat: mid 2022 (Kiss Me More was a good song)
 
-```{r}
+# Top 10 Albums
+Out of sheer curiosity, I wondered if all of my top 10 listened albums were from my top 10 artists.
+
+```{r, echo=F, message=F, warning=F}
 top_albums <- 
   lfm_data |>
     group_by(artist, album) |>
@@ -147,88 +216,489 @@ top_albums <-
     arrange(desc(num_listens))
 ```
 
-```{r}
+```{r, echo=F, message=F}
 # Planet Her (Deluxe) and Planet Her are basically the same album
 # I chose to just combine them both
 top_albums$num_listens[3] <- top_albums$num_listens[2] + top_albums$num_listens[3]
 top_albums <- top_albums[-2,]
 ```
 
-```{r}
+```{r, echo=F, message=F}
 top_albums$full_album <- paste(top_albums$artist, top_albums$album, sep = " - ")
 ```
 
-```{r}
+```{r, echo=F, message=F}
 top_albums <-
   top_albums |>
   head(n=10)
 ```
 
-```{r}
+```{r, echo=F, message=F, class.source = 'fold-show'}
 albums_plot <- 
   ggplot(data=top_albums, aes(x=reorder(full_album, num_listens), y=num_listens, fill=reorder(full_album, num_listens))) +
-  geom_bar(stat = "identity", show.legend = FALSE)
+  geom_bar(stat = "identity", show.legend = FALSE) +
+  scale_fill_manual(values = tableau_color_pal("Classic 10")(10)) +
+  scale_y_continuous(
+      limits = c(0, max(top_albums$num_listens) + 500),
+      breaks = seq(0, max(top_albums$num_listens) + 500, 1000),
+      minor_breaks = seq(0, max(top_albums$num_listens) + 500, 500),
+      expand = c(0,0)
+    )
 
+```
+
+```{r, echo=F, message=F, class.source = 'fold-show'}
 albums_plot <-
   albums_plot +
   labs(
     x = "Album",
-    y = "Total number of listens"
+    y = "Total number of listens",
+    title = "Top 10 Albums (2017-2024)"
   ) +
+  theme_minimal() +
   theme(
-    legend.position = "none"
+    plot.title = element_text(hjust=0.5, size = rel(1.75), face = "bold"),
+    legend.position = "none",
+    axis.line.y = element_blank(),
+    axis.line.x = element_blank(),
+    panel.grid.minor.y = element_blank(),
+    panel.grid.major.y = element_blank()
   ) +
   coord_flip()
 ```
 
-```{r}
+```{r, echo=F, message=F}
 albums_plot
 ```
-## Countries and Genres
+Only two albums out of 10 were not from a top 10 artist of mine, and only half of my top 10 artists made an album that was in my top 10 albums. I personally think [reality in BLACK](https://en.wikipedia.org/wiki/Reality_in_Black) is Mamamoo's best album (stream [HIP](https://www.youtube.com/watch?v=KhTeiaCezwM)). I think U.U.F.O. made it in because the album has [one of the longest song titles known to myself](https://www.youtube.com/watch?v=LnkfOVHkVfo), and I like putting horribly long song names in my listening history.
 
-```{r}
+# Top Countries
+I wanted to know what countries the music I listened to came from, and expected to have a lot of scrobbles of songs of artists from United States, Korea, and Japan.
+
+As I was gathering this information, I noticed that either the MusicBrainz database is lacking in country information for a lot of artists, or my scrobble history database is lacking in MusicBrainz IDs for a lot of artists. As such, this may not be the most accurate.
+
+```{r, echo=F, message=F}
 artist_genre <- read.csv("datasets/artist_genre.csv")
 ```
 
-```{r}
-artist_genre
+```{r, echo = F, message=F, results = 'hide'}
+artist_genre |>
+  head(25)
 ```
 
-
-```{r}
+```{r, echo=F, message=F}
 artist_country <- read.csv("datasets/country_codes.csv")
 ```
-```{r}
-artist_country
+
+```{r, echo = F, message=F, results = 'hide'}
+artist_country |>
+  head(25)
 ```
 
-
-```{r}
+```{r, echo=F, message=F}
 lfm_country <- 
   lfm_data |>
   left_join(artist_country, by = join_by(artist_mbid == artist_mbid))
 ```
 
-```{r}
-lfm_country
+```{r, echo = F, message=F, results = 'hide'}
+lfm_country |>
+  head(25)
 ```
 
-```{r}
+```{r, echo=F, message=F}
 lfm_country_genre <-
   lfm_country |>
   left_join(artist_genre, by = join_by(artist == artist))
 ```
 
-```{r}
+```{r, echo=F, message=F}
 lfm_country_genre <- lfm_country_genre |> select(-c(X, count))
 ```
 
-```{r}
-lfm_country_genre
-```
-
-```{r}
+```{r, echo = F, message=F, results = 'hide'}
 lfm_country_genre |>
-  write.csv("datasets/lfm-complete.csv")
+  head(25)
 ```
 
+```{r, echo=F, message=F}
+#lfm_country_genre |>
+#  write.csv("datasets/lfm-complete.csv")
+```
+
+```{r, echo=F, message=F}
+# lfm_country_genre <- read.csv("datasets/lfm-complete.csv")
+```
+
+```{r, echo=F, message=F, warning=F}
+world_map <- map_data("world")
+world_map$region <- countrycode(world_map$region, "country.name", "iso2c")
+```
+
+```{r, echo = F, message=F, results = 'hide'}
+world_map |>
+  head(25)
+```
+
+```{r, echo=F, message=F}
+lfm_artist_country <- lfm_country_genre |>
+  group_by(artist, country_code) |>
+  summarize(country_listens = n()) |>
+  arrange(desc(country_listens))
+
+lfm_country_listen_count <- lfm_artist_country |>
+  group_by(country_code) |>
+  summarize(total_listens = sum(country_listens))
+```
+
+```{r, echo=F, message=F}
+lfm_country_listen_count <-
+  lfm_country_listen_count |> drop_na()
+```
+
+```{r, echo = F, message=F, results = 'hide'}
+lfm_country_listen_count |>
+  head(25)
+```
+
+```{r, echo = F, message=F, results = 'hide'}
+lfm_country_listen_count |>
+  arrange(desc(total_listens)) |>
+  head(25)
+```
+
+```{r, echo=F, message=F}
+lfm_world_map <- 
+  left_join(world_map, 
+            lfm_country_listen_count, 
+            by = join_by(region == country_code))
+
+lfm_world_map$total_listens <- lfm_world_map$total_listens |>
+  replace_na(0)
+```
+
+```{r, echo=F, message=F}
+lfm_world_map <- lfm_world_map |>
+  arrange(group, order)
+```
+
+```{r, echo=F, message=F}
+# Need to fine-tune the scaling a bit lol
+lfm_world_map$colour <- cut(lfm_world_map$total_listens, 
+                      breaks = c(-Inf, 0, 5, 10, 40, 130, 450, 1000, 5000, 10000, Inf), 
+                      labels = c("0", "1-5", "6-10", "11-40", "41-130", "131-450", "450-1000", "1001-5000", "5001-10000", "10000+"))
+```
+
+```{r, echo = F, message=F, results = 'hide'}
+lfm_world_map |>
+  head(25)
+```
+
+```{r, echo=F, message=F, class.source = 'fold-show'}
+lfm_world_plot <- 
+  ggplot(lfm_world_map, 
+         aes(x = long, y = lat, group = group, fill = colour)
+         ) +
+  geom_polygon() + 
+  coord_map(xlim=c(-180,180)) +
+  scale_fill_brewer(palette = "YlGnBu")
+```
+
+```{r, echo=F, message=F, class.source = 'fold-show'}
+lfm_world_plot <-
+  lfm_world_plot +
+  labs(
+    fill = "# Scrobbles",
+    title = "World map of scrobbles"
+  ) +
+  theme_map() +
+  theme(plot.title = element_text(hjust=0.5, size = rel(1.75), face = "bold"),
+        panel.background = element_rect(fill="#dddddd", colour="#dddddd"))
+```
+
+```{r, echo=F}
+lfm_world_plot
+```
+It definitely shows that I am a big fan of Western pop, K-pop, and Japanese EDM. There were some things that surprised me though. I'm surprised I listen to a decent amount of Australian, Spanish, and French musicians. I also, for some reason, have a surprising amount of listens to Russian musicians.
+
+The scale I used may not be the most conventional, but that's mainly because the data is too extreme (only around 5 countries had so many listens, the rest had less than 5000).
+
+This chart was inspired by [Explr.fm](https://mold.github.io/explr/?username=emperte).
+
+# Top Genres/Tags
+Some notes:
+
+- Last.fm has a public API, but there is a limit of [100mb per API token, as shown in the TOS, section 4.3.4](https://www.last.fm/api/tos). I was afraid I would reach that limit knowing I have around 13k unique artist/song combinations, so I had to take shortcuts and get the top genre of an artist instead of a song. This is also why I didn't want to re-do this process, even though there are a few problems with the data detailed in the next point. 
+- As I was gathering the data for this, I realized that last.fm doesn't have a "genre", but more a "top tag". This threw me off a little - the top tags for some artists are very weird (example at the time: KAYTRANADA's top tag is "seen live" when I got the top tags; this messed up my info because now his top tag is "electronic").
+  - There is also no consistency with tags on Last.fm; there is a `Kpop` and a `k-pop` tag that describes the same genre.
+- The sum of all scrobbles with artist tags is ~68,000, and I don't know why, because with how I coded this, the sum should be ~95,000.
+
+```{r, echo=F, message=F}
+lfm_genre_data <- lfm_country_genre |>
+  group_by(genre) |>
+  summarise(listens = n())
+
+lfm_genre_data <- lfm_genre_data[-1,]
+```
+
+```{r, echo=F, message=F}
+lfm_genre_data <-
+  lfm_genre_data |>
+  arrange(desc(listens)) |>
+  head(n=14) |>
+  add_row(genre = "Other", listens = nrow(lfm_country_genre) - sum(lfm_genre_data$listens))
+```
+
+```{r, echo=F, message=F}
+lfm_genre_data$percentage <- scales::label_percent(accuracy=0.01)(lfm_genre_data$listens / sum(lfm_genre_data$listens))
+```
+
+```{r, echo=F, message=F}
+lfm_genre_data <-
+  lfm_genre_data |>
+  mutate(row_number = row_number())
+```
+
+```{r, echo = F, results = 'hide'}
+lfm_genre_data
+```
+
+```{r, echo=F, message=F}
+lfm_genre_stitched <-
+  lfm_genre_data |>
+  unite("genre_percentage", c("genre", "percentage"), sep=" - ")
+```
+
+```{r, echo = F, results = 'hide'}
+lfm_genre_stitched
+```
+
+```{r, echo=F, message=F, class.source = 'fold-show'}
+genre_pie_chart <-
+  ggplot(lfm_genre_stitched, aes(x="", y=listens, fill=reorder(genre_percentage, row_number))) +
+  geom_bar(stat="identity", width=1) +
+  coord_polar("y", start=0) +
+  scale_fill_manual(values = tableau_color_pal("Tableau 20")(20))
+```
+
+```{r, echo=F, message=F, class.source = 'fold-show'}
+genre_pie_chart <-
+  genre_pie_chart +
+  labs(
+    fill = "Tag",
+    title = "Last.fm Tag Breakdown"
+  ) +
+  theme_void() +
+  theme(plot.title = element_text(hjust=0.5, size = rel(1.75), face = "bold"),
+        axis.title.x=element_blank(),
+        axis.text.x=element_blank(),
+        axis.ticks.x=element_blank(),
+        axis.ticks.y=element_blank(),
+        axis.title.y=element_blank(),
+        axis.text.y=element_blank(),
+        panel.grid = element_blank())
+```
+
+```{r, echo=F}
+genre_pie_chart
+```
+Wow, I listen to a lot of K-pop groups and soloists (and this probably isn't all of it because of the tag consistencies). I'm assuming the hip-hop comes from all the Tyler, the Creator, Kendrick Lamar, and Mac Miller I listened to over the years. 
+
+I think there's probably an overlap with some of these tags - I mentioned I listened to a lot of Japanese EDM, and "japanese" and "electronic" are two different tags. I also find it amusing how, even though Doja Cat is my #1 artist, (western) pop is only around 7% of the music I listen to.
+
+# Top Hours
+I have no concept of time, so my hypothesis is that I listen to music most when I'm most awake.
+
+```{r, echo=F, message=F}
+scrobble_date <- lfm_data$uts |>
+  as_datetime(tz = "America/Toronto") |>
+  as_date()
+
+scrobble_time <- lfm_data$uts |>
+  as_datetime(tz = "America/Toronto") |>
+  strftime(format="%H:%M:%S") |>
+  hms() |>
+  period_to_seconds()
+
+
+scrobble_datetime <- 
+  data.frame(scrobble_date, scrobble_time, lfm_data$est_time, lfm_country_genre$genre) |>
+  rename(date = scrobble_date,
+         time = scrobble_time,
+         datetime = lfm_data.est_time,
+         genre = lfm_country_genre.genre)
+```
+
+```{r, echo = F, results = 'hide'}
+scrobble_datetime |>
+  head(25)
+```
+
+```{r, echo=F, message=F}
+scrobble_datetime <- scrobble_datetime |>
+  left_join(lfm_genre_data, by = join_by(genre == genre)) |>
+  select(-one_of("listens", "percentage")) |>
+  rename(colour = row_number)
+```
+
+```{r, echo=F, message=F}
+scrobble_datetime$colour <- scrobble_datetime$colour |>
+  replace_na(15)
+
+scrobble_datetime <- scrobble_datetime |>
+  mutate(colour = ifelse(colour <= 10, colour, 11))
+```
+
+```{r, echo = F, results = 'hide'}
+scrobble_datetime |>
+  head(25)
+```
+
+
+```{r, echo=F, message=F, warning=F}
+scrobble_hour <- scrobble_datetime |>
+  mutate(hour = datetime |> format("%H")) |>
+  group_by(date, hour) |>
+  summarise(listens = n())
+```
+
+```{r, echo = F, results = 'hide'}
+scrobble_hour |>
+  head(25)
+```
+
+```{r, echo=F, message=F}
+scrobble_hour_avg <- scrobble_hour |>
+  group_by(hour) |>
+  summarise(mean_listens = sum(listens) / 2641, 
+            total_listens = sum(listens),
+            total_days = n())
+```
+
+```{r, echo = F, results = 'hide'}
+scrobble_hour_avg
+```
+
+```{r, echo=F, message=F}
+scrobble_circle_labels <- scrobble_hour_avg |>
+  mutate(label_name = paste(hour, ":00 (", total_listens, ")", sep = ""))
+```
+
+```{r, echo = F, results = 'hide'}
+scrobble_circle_labels
+```
+
+# Listening Activity by Time
+
+```{r, echo=F, message=F}
+scrobble_circle_bar <- scrobble_hour_avg |>
+  ggplot(aes(x = as.factor(hour), y = total_listens, fill = reorder(hour, total_listens))) +
+  geom_bar(stat="identity") +
+  ylim(-1000, max(scrobble_hour_avg$total_listens)) +
+  coord_polar(start = 0)
+```
+
+```{r, echo=F, message=F}
+even_more_colours <- colorRampPalette(brewer.pal(9, "YlOrRd"))(24)
+```
+
+```{r, echo=F, message=F, class.source = 'fold-show'}
+scrobble_circle_bar <- scrobble_circle_bar +
+  scale_fill_manual(values = even_more_colours) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(hjust=0.5, size = rel(1.75), face = "bold"),
+    axis.text.y = element_blank(),
+    axis.title = element_blank(),
+    panel.grid = element_blank(),
+    legend.position = "none"
+  ) +
+  scale_x_discrete(labels=scrobble_circle_labels$label_name)
+```
+
+```{r, echo=F, message=F, class.source = 'fold-show'}
+scrobble_circle_bar <- scrobble_circle_bar +
+  labs(
+    title = "Total number of scrobbles per hour of day"
+  )
+```
+
+```{r, echo=F}
+scrobble_circle_bar
+```
+From my all-time stats, I tend to listen to music often from 11:00am to 10:00pm, and not so much when I'm asleep (from around 1:00am to 8:00am). This makes sense, as I tend to be productive during these hours. I'm shocked that I listened to the most music at 12:00pm though, as I would assume I eat lunch during that time. 
+
+This chart was inspired by Last.fm's own "Listening Clock" graph (pictured below), which is probably more representative of my work schedule lately. It shows I tend to listen to music in the late afternoon/evening, which makes sense because lately I've been waking up at 10:00am, only to not do schoolwork until 2:00pm, then stop at 7:00pm.
+
+
+
+# Song Tag Scatterplot
+The last thing I wanted to know was if I could have a finer breakdown of what music I listened to over the years. For the sake of having readable colours for such a big plot, I had to reduce the number of genres from 14 to 10. All of the caveats from the prior "tag" chart also apply to this one.
+
+```{r, echo=F, message=F, class.source = 'fold-show'}
+scrobble_datetime_scatter <-
+  ggplot(scrobble_datetime, aes(x = date, y = time, col=as.factor(colour))) +
+  geom_point(size=0.5) +
+  scale_colour_manual(values = append(tableau_color_pal("Classic 20")(10), "#999999"),
+                    labels = 
+                          head(lfm_genre_data$genre, 10) |>
+                          append("other"),
+                    name = "Genre")
+```
+
+```{r, echo=F, message=F, class.source = 'fold-show'}
+# https://stackoverflow.com/questions/66021305/how-to-make-scale-y-reverse-work-with-scale-y-time
+scrobble_datetime_scatter <-
+  scrobble_datetime_scatter +
+  scale_x_date(limits = as.Date(c("2017-01-02", "2024-03-27")), 
+               date_breaks = "1 year", 
+               labels = scales::label_date("%Y"),
+               expand = c(0, 0)) +
+  scale_y_reverse(labels = 
+                    function(x) format(as.POSIXct(x, tz = "UTC"), format = "%H:%M"),
+                  breaks = 
+                    seq(as.numeric(hms("00:00:00")), 
+                        as.numeric(hms("23:59:59")),
+                        7200),
+                  expand = c(0, 0))
+```
+
+```{r, echo=F, message=F, class.source = 'fold-show'}
+scrobble_datetime_scatter <-
+  scrobble_datetime_scatter +
+    labs(
+      title = "Listening history from January 2017 to March 2024, by genre",
+      x = "Year",
+      y = "Hour of day"
+    ) +
+    theme_lucid() +
+    theme(
+      plot.title = element_text(hjust=0.5, size = rel(1.75), face = "bold"),
+      legend.position = "top",
+      panel.grid.major = element_blank(),
+      panel.grid.minor = element_blank()
+    ) +
+    guides(
+      color = guide_legend(override.aes = list(size = 5, shape = 15), nrow=1)
+    )
+```
+
+```{r, echo=F}
+scrobble_datetime_scatter
+```
+\*Turns out what I said in my introduction wasn't true after all. There are some gaps in the plot from what I assume is no music activity.
+
+You can see that I didn't really ramp up with listening to music until late 2019, in which I decided to scrobble a lot until mid-2022. Funnily enough, it looks like my big streak of music listening starts with a dense period in late 2019, becomes less dense in between (but still more so compared to 2017 and 2023), then ends with a very dense period in mid-2022. 
+
+There is a streak of orange in late 2019, probably based on a streak I had of listening to Japanese EDM. Additionally, If I'm correct, the period between the end of 2021 and the beginning of 2022 has me scrobbling a mix of different genres (presumably, to get over my ex breaking up with me). It's funny to me that I see a lot of green around the time I listened to nothing but Doja Cat (mid-2022).
+
+There is one caveat with having only 10 visible genres; it doesn't show my current synthpop phase. Lately, I've been listening to a lot of [Magdalena Bay](https://en.wikipedia.org/wiki/Magdalena_Bay_(band)), but you wouldn't know because synthpop is one of the "other" tags. It also doesn't help with the one day I left my Spotify on playing Italian death metal band [Fleshgod Apocalypse](https://en.wikipedia.org/wiki/Fleshgod_Apocalypse) at the end of 2020.
+
+This scatterplot was inspired by [Scatter.FM](https://scatterfm.markhansen.co.nz/graph.html#/user/emperte).
+
+# Summary
+
+- I tend to go through phases of listening to artists a lot for a period of time, and then never listening to them again.
+- I slowly started listening to more music starting in late 2019 and ending in mid-2022. I listened to the least music in 2023.
+- I listen to a lot of American pop, Korean pop, and Japanese EDM.
+- I listen to music the most during the afternoon and early evening.
